@@ -13,6 +13,8 @@ import {
   Check,
   ArrowLeft,
   Receipt,
+  Loader2,
+  Lock,
 } from 'lucide-react'
 
 // --- Types ---
@@ -30,7 +32,7 @@ interface CartItem {
 }
 
 type PaymentMethod = 'cash' | 'card' | 'contactless' | null
-type Screen = 'register' | 'payment' | 'receipt'
+type Screen = 'register' | 'payment' | 'processing' | 'receipt'
 
 // --- Product data ---
 const products: Product[] = [
@@ -81,6 +83,27 @@ function App() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null)
   const [cashGiven, setCashGiven] = useState('')
   const [, setPaymentComplete] = useState(false)
+  const [cardNumber, setCardNumber] = useState('')
+  const [cardExpiry, setCardExpiry] = useState('')
+  const [cardCvv, setCardCvv] = useState('')
+  const [cardName, setCardName] = useState('')
+
+  // Format card number with spaces every 4 digits
+  const formatCardNumber = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 16)
+    return digits.replace(/(\d{4})(?=\d)/g, '$1 ')
+  }
+
+  // Format expiry as MM/YY
+  const formatExpiry = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 4)
+    if (digits.length >= 3) return digits.slice(0, 2) + '/' + digits.slice(2)
+    return digits
+  }
+
+  // Validate card details
+  const cardDigits = cardNumber.replace(/\s/g, '')
+  const isCardValid = cardDigits.length === 16 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 2
 
   // Filtered products
   const filteredProducts = products.filter((p) => {
@@ -128,16 +151,65 @@ function App() {
 
   const handlePayment = () => {
     if (paymentMethod === 'cash' && cashGivenNum < total) return
-    setPaymentComplete(true)
-    setScreen('receipt')
+    if ((paymentMethod === 'card' || paymentMethod === 'contactless') && !isCardValid) return
+    setScreen('processing')
+    setTimeout(() => {
+      setPaymentComplete(true)
+      setScreen('receipt')
+    }, 3000)
   }
 
   const handleNewTransaction = () => {
     setCart([])
     setPaymentMethod(null)
     setCashGiven('')
+    setCardNumber('')
+    setCardExpiry('')
+    setCardCvv('')
+    setCardName('')
     setPaymentComplete(false)
     setScreen('register')
+  }
+
+  // --- PROCESSING SCREEN ---
+  if (screen === 'processing') {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
+          <div className="text-center">
+            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Betaling bezig...</h2>
+            <p className="text-gray-500 mb-6">Even geduld, uw betaling wordt verwerkt</p>
+
+            <div className="bg-gray-50 rounded-xl p-4 mb-4">
+              <div className="flex justify-between text-sm text-gray-500 mb-1">
+                <span>Betaalmethode</span>
+                <span className="font-medium text-gray-700">
+                  {paymentMethod === 'card' ? 'Pinpas' : 'Contactloos'}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm text-gray-500 mb-1">
+                <span>Kaartnummer</span>
+                <span className="font-medium text-gray-700">
+                  **** **** **** {cardDigits.slice(-4)}
+                </span>
+              </div>
+              <div className="flex justify-between text-lg font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2">
+                <span>Bedrag</span>
+                <span>€{total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+              <Lock className="w-4 h-4" />
+              <span>Beveiligde verbinding</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // --- RECEIPT SCREEN ---
@@ -325,11 +397,85 @@ function App() {
             </div>
           )}
 
+          {(paymentMethod === 'card' || paymentMethod === 'contactless') && (
+            <div className="mb-6 space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Lock className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-500">Veilige betaling</span>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Naam op kaart
+                </label>
+                <input
+                  type="text"
+                  value={cardName}
+                  onChange={(e) => setCardName(e.target.value)}
+                  placeholder="Jan Jansen"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Kaartnummer
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={cardNumber}
+                    onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                    placeholder="0000 0000 0000 0000"
+                    maxLength={19}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 text-lg tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  />
+                  <CreditCard className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-300" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Vervaldatum
+                  </label>
+                  <input
+                    type="text"
+                    value={cardExpiry}
+                    onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
+                    placeholder="MM/JJ"
+                    maxLength={5}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    CVV
+                  </label>
+                  <input
+                    type="password"
+                    value={cardCvv}
+                    onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="•••"
+                    maxLength={4}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={handlePayment}
-            disabled={!paymentMethod || (paymentMethod === 'cash' && cashGivenNum < total)}
+            disabled={
+              !paymentMethod ||
+              (paymentMethod === 'cash' && cashGivenNum < total) ||
+              ((paymentMethod === 'card' || paymentMethod === 'contactless') && !isCardValid)
+            }
             className={`w-full py-4 rounded-xl text-white font-semibold text-lg transition-all ${
-              !paymentMethod || (paymentMethod === 'cash' && cashGivenNum < total)
+              !paymentMethod ||
+              (paymentMethod === 'cash' && cashGivenNum < total) ||
+              ((paymentMethod === 'card' || paymentMethod === 'contactless') && !isCardValid)
                 ? 'bg-gray-300 cursor-not-allowed'
                 : 'bg-green-600 hover:bg-green-700 shadow-lg hover:shadow-xl'
             }`}
@@ -338,6 +484,8 @@ function App() {
               ? 'Kies een betaalmethode'
               : paymentMethod === 'cash' && cashGivenNum < total
               ? 'Onvoldoende bedrag'
+              : (paymentMethod === 'card' || paymentMethod === 'contactless') && !isCardValid
+              ? 'Vul kaartgegevens in'
               : `Betaal €${total.toFixed(2)}`}
           </button>
         </div>
